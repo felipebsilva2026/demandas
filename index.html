@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Minhas Demandas</title>
   
-  <!-- Ferramentas nativas importadas da nuvem -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
@@ -21,12 +20,9 @@
 <body>
   <div id="root"></div>
 
-  <!-- Lógica do Kanban -->
   <script type="text/babel">
     const { useState, useRef, useEffect } = React;
 
-    // === CONFIGURAÇÃO SUPABASE ===
-    // Quando você criar seu banco de dados, colaremos os links reais aqui.
     const SUPABASE_URL = ''; 
     const SUPABASE_ANON_KEY = '';
 
@@ -47,41 +43,11 @@
 
     const TASK_TYPES = [
       { id: 'paineis', label: 'Painéis' },
-      { id: 'rh', label: 'RH (Comunicação interna)' },
+      { id: 'rh', label: 'RH', color: 'bg-purple-100 text-purple-800' },
       { id: 'eventos', label: 'Eventos' },
       { id: 'grafico', label: 'Material Gráfico' },
       { id: 'envio', label: 'Envio de Materiais' },
     ];
-
-    const supabaseRequest = async (endpoint, method = 'GET', body = null) => {
-        if (!SUPABASE_URL || !SUPABASE_URL.startsWith('http')) return null;
-        const headers = {
-            'apikey': SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-            'Content-Type': 'application/json',
-            'Prefer': 'return=representation'
-        };
-        try {
-            const response = await fetch(`${SUPABASE_URL}/rest/v1/${endpoint}`, { method, headers, body: body ? JSON.stringify(body) : null });
-            if (!response.ok) throw new Error(`Erro: ${response.status}`);
-            const text = await response.text();
-            return text ? JSON.parse(text) : null;
-        } catch (error) { return null; }
-    };
-
-    const callGeminiAPI = async (prompt, isJson = false) => {
-      const apiKey = ""; // Chave do ambiente demonstrativo
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-      const payload = { contents: [{ parts: [{ text: prompt }] }] };
-      if (isJson) payload.generationConfig = { responseMimeType: "application/json" };
-
-      try {
-        const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-        const result = await response.json();
-        const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-        return isJson ? JSON.parse(text) : text;
-      } catch (err) { return null; }
-    };
 
     const formatTime = (totalSeconds) => {
       if (!totalSeconds) return '00:00';
@@ -104,188 +70,92 @@
       return <span className={className}>{formatTime((timeSpent || 0) + elapsed)}</span>;
     };
 
-    const FALLBACK_TASKS = [
-      { id: 't1', parentId: null, title: 'Criar protótipo da tela inicial', status: 'desenvolvimento', priority: 'alta', type: 'paineis', startDate: '2026-06-20', endDate: '2026-06-25', description: 'Desenvolver o wireframe e o design para a tela inicial.', comments: [], attachments: [], timeSpent: 3600, isTimerRunning: false, lastTimerStart: null }
-    ];
-
     const Icons = {
       Plus: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>,
       X: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>,
-      Pencil: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>,
-      PaperClip: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>,
-      Calendar: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>,
-      Chat: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>,
-      Trash: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>,
       Play: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>,
       Pause: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>,
-      Clock: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>,
-      ChevronDown: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>,
-      ChevronUp: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 15l7-7 7 7"></path></svg>,
-      ArrowLeft: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>,
-      CornerDownRight: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5v4a2 2 0 002 2h9M15 16l5-5-5-5"></path></svg>,
-      Layout: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 4v16"></path></svg>,
-      BarChart: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 20V10M12 20V4M6 20v-4"></path></svg>,
-      Sparkles: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path></svg>,
-      Spinner: () => <svg className="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>,
-      LightBulb: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>,
-      Database: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path></svg>
+      Trash: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>,
+      Database: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path></svg>,
+      Layout: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 4v16"></path></svg>
     };
 
+    const INITIAL_TASKS = [
+      { id: 't1', title: 'Exemplo de Demanda', status: 'backlog', priority: 'media', type: 'paineis', timeSpent: 0, isTimerRunning: false, lastTimerStart: null }
+    ];
+
     function App() {
-      const [tasks, setTasks] = useState([]);
-      const [loading, setLoading] = useState(true);
-      const [dbStatus, setDbStatus] = useState('offline');
-      
+      const [tasks, setTasks] = useState(INITIAL_TASKS);
       const [draggedTaskId, setDraggedTaskId] = useState(null);
-      const [activeTab, setActiveTab] = useState('kanban');
-      const [taskToDelete, setTaskToDelete] = useState(null);
-      const [modalStack, setModalStack] = useState([]);
-      const currentSelectedTaskId = modalStack[modalStack.length - 1];
-      const selectedTask = tasks.find(t => t.id === currentSelectedTaskId);
-      const isModalOpen = modalStack.length > 0;
-      const [expandedCards, setExpandedCards] = useState({});
-
-      useEffect(() => {
-        const fetchTasksFromDB = async () => {
-          setLoading(true);
-          const data = await supabaseRequest('demandas?select=*');
-          if (data && Array.isArray(data)) {
-            setDbStatus('online');
-            setTasks(data.map(row => ({
-               id: row.id, parentId: row.parent_id, title: row.title, status: row.status, priority: row.priority,
-               type: row.type, startDate: row.start_date || '', endDate: row.end_date || '', description: row.description || '',
-               timeSpent: row.time_spent || 0, isTimerRunning: row.is_timer_running || false,
-               lastTimerStart: row.last_timer_start ? parseInt(row.last_timer_start) : null,
-               comments: row.comments_json ? JSON.parse(row.comments_json) : [],
-               attachments: row.attachments_json ? JSON.parse(row.attachments_json) : []
-            })));
-          } else {
-            setDbStatus('offline');
-            setTasks(FALLBACK_TASKS);
-          }
-          setLoading(false);
-        };
-        fetchTasksFromDB();
-      }, []);
-
-      const syncTaskToDB = async (taskToSync) => {
-         if (dbStatus === 'offline') return;
-         await supabaseRequest('demandas', 'POST', {
-            id: taskToSync.id, parent_id: taskToSync.parentId, title: taskToSync.title, status: taskToSync.status,
-            priority: taskToSync.priority, type: taskToSync.type, start_date: taskToSync.startDate || null, end_date: taskToSync.endDate || null,
-            description: taskToSync.description || null, time_spent: taskToSync.timeSpent || 0, is_timer_running: taskToSync.isTimerRunning,
-            last_timer_start: taskToSync.lastTimerStart ? taskToSync.lastTimerStart.toString() : null,
-            comments_json: JSON.stringify(taskToSync.comments || []), attachments_json: JSON.stringify(taskToSync.attachments || [])
-         });
-      };
 
       const toggleTimer = (e, taskId) => {
         e.stopPropagation();
-        let updatedTargetTask = null;
         setTasks(prevTasks => {
           const now = Date.now();
-          const targetTask = prevTasks.find(t => t.id === taskId);
-          const isStarting = !targetTask.isTimerRunning;
+          const isStarting = !prevTasks.find(t => t.id === taskId).isTimerRunning;
           return prevTasks.map(task => {
             if (task.id === taskId) {
-              updatedTargetTask = isStarting ? { ...task, isTimerRunning: true, lastTimerStart: now } : { ...task, isTimerRunning: false, timeSpent: task.timeSpent + (task.lastTimerStart ? Math.floor((now - task.lastTimerStart) / 1000) : 0), lastTimerStart: null };
-              return updatedTargetTask;
-            } else if (isStarting && task.isTimerRunning) {
-              const upd = { ...task, isTimerRunning: false, timeSpent: task.timeSpent + (task.lastTimerStart ? Math.floor((now - task.lastTimerStart) / 1000) : 0), lastTimerStart: null };
-              syncTaskToDB(upd);
-              return upd;
+              return isStarting 
+                ? { ...task, isTimerRunning: true, lastTimerStart: now } 
+                : { ...task, isTimerRunning: false, timeSpent: task.timeSpent + Math.floor((now - task.lastTimerStart) / 1000), lastTimerStart: null };
+            }
+            if (isStarting && task.isTimerRunning) {
+               return { ...task, isTimerRunning: false, timeSpent: task.timeSpent + Math.floor((now - task.lastTimerStart) / 1000), lastTimerStart: null };
             }
             return task;
           });
         });
-        if (updatedTargetTask) syncTaskToDB(updatedTargetTask);
       };
 
-      const handleDragStart = (e, taskId) => { setDraggedTaskId(taskId); e.dataTransfer.setData('text/plain', taskId); setTimeout(() => { e.target.classList.add('opacity-50'); }, 0); };
+      const handleCreateTask = () => {
+        const newTask = { id: `t${Date.now()}`, title: 'Nova Demanda', status: 'backlog', priority: 'media', type: 'paineis', timeSpent: 0, isTimerRunning: false, lastTimerStart: null };
+        setTasks([...tasks, newTask]);
+      };
+
+      const handleDragStart = (e, taskId) => { setDraggedTaskId(taskId); setTimeout(() => e.target.classList.add('opacity-50'), 0); };
       const handleDragEnd = (e) => { e.target.classList.remove('opacity-50'); setDraggedTaskId(null); };
-      const handleDragOver = (e) => { e.preventDefault(); };
       const handleDrop = (e, columnId) => {
         e.preventDefault();
-        if (!draggedTaskId) return;
-        setTasks(prevTasks => {
-          const newTasks = prevTasks.map(task => task.id === draggedTaskId ? { ...task, status: columnId } : task);
-          const movedTask = newTasks.find(t => t.id === draggedTaskId);
-          if (movedTask) syncTaskToDB(movedTask);
-          return newTasks;
-        });
+        setTasks(prev => prev.map(t => t.id === draggedTaskId ? { ...t, status: columnId } : t));
         setDraggedTaskId(null);
       };
 
-      const handleCreateTask = (parentId = null) => {
-        const newTask = { id: `t${Date.now()}`, parentId: parentId, title: parentId ? 'Nova Subtarefa' : 'Nova Demanda', status: 'backlog', priority: 'media', type: 'paineis', startDate: '', endDate: '', description: '', comments: [], attachments: [], timeSpent: 0, isTimerRunning: false, lastTimerStart: null };
-        setTasks(prev => [...prev, newTask]);
-        syncTaskToDB(newTask);
-        openTask(newTask);
-      };
-
-      const openTask = (taskOrId) => { setModalStack(prev => [...prev, typeof taskOrId === 'string' ? taskOrId : taskOrId.id]); };
-      const closeTask = () => { setModalStack(prev => prev.slice(0, -1)); };
-      const closeAllModals = () => { setModalStack([]); };
-
-      const saveTask = (updatedTask) => {
-        setTasks(prevTasks => prevTasks.map(t => t.id === updatedTask.id ? { ...updatedTask, timeSpent: t.timeSpent, isTimerRunning: t.isTimerRunning, lastTimerStart: t.lastTimerStart } : t));
-        syncTaskToDB(updatedTask);
-      };
-
-      const getSubtaskIdsToRemove = (parentId, allTasks) => {
-        let ids = [];
-        const children = allTasks.filter(t => t.parentId === parentId);
-        for (const child of children) { ids.push(child.id); ids = [...ids, ...getSubtaskIdsToRemove(child.id, allTasks)]; }
-        return ids;
-      };
-
-      const executeDelete = async () => {
-        if (!taskToDelete) return;
-        const idsToRemove = [taskToDelete, ...getSubtaskIdsToRemove(taskToDelete, tasks)];
-        setTasks(prevTasks => prevTasks.filter(t => !idsToRemove.includes(t.id)));
-        setModalStack(prevStack => prevStack.filter(id => !idsToRemove.includes(id)));
-        if (dbStatus === 'online') {
-            for (const id of idsToRemove) { await supabaseRequest(`demandas?id=eq.${id}`, 'DELETE'); }
-        }
-        setTaskToDelete(null);
-      };
-
-      if (loading) return <div className="min-h-screen flex items-center justify-center"><Icons.Spinner /></div>;
-
       return (
-        <div className="min-h-screen flex flex-col">
+        <div className="min-h-screen flex flex-col text-slate-800 font-sans">
           <header className="bg-white shadow-sm px-6 py-4 flex justify-between items-center border-b">
-            <h1 className="text-2xl font-bold">Minhas Demandas</h1>
-            <div className="flex bg-slate-100 p-1 rounded-lg">
-              <button onClick={() => setActiveTab('kanban')} className={`px-4 py-2 text-sm font-medium rounded-md ${activeTab === 'kanban' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>Quadro</button>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold">Minhas Demandas</h1>
+              <span className="flex items-center gap-1 text-[10px] bg-slate-100 text-slate-500 border px-2 py-0.5 rounded-full font-bold uppercase"><Icons.Database /> Offline</span>
             </div>
-            {activeTab === 'kanban' && <button onClick={() => handleCreateTask(null)} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium">+ Nova Demanda</button>}
+            <button onClick={handleCreateTask} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2"><Icons.Plus /> Nova Demanda</button>
           </header>
 
           <main className="flex-1 overflow-x-auto p-6">
-            {activeTab === 'kanban' && (
-              <div className="flex gap-6 items-start">
-                {COLUMNS.map(column => (
-                  <div key={column.id} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, column.id)} className={`w-80 flex flex-col rounded-xl border ${column.color}`}>
-                    <div className="p-4 font-semibold border-b bg-white/50">{column.title}</div>
-                    <div className="p-3 space-y-3">
-                      {tasks.filter(t => !t.parentId && t.status === column.id).map(task => (
-                        <div key={task.id} draggable onDragStart={(e) => handleDragStart(e, task.id)} onDragEnd={handleDragEnd} onClick={() => openTask(task.id)} className="bg-white p-4 rounded-lg shadow-sm border cursor-grab">
-                           <h3 className="font-medium text-slate-800">{task.title}</h3>
-                           <button onClick={(e) => toggleTimer(e, task.id)} className="mt-4 flex items-center gap-1 text-xs border p-1 rounded">
-                              {task.isTimerRunning ? <Icons.Pause /> : <Icons.Play />}
-                              <LiveTimerDisplay timeSpent={task.timeSpent} isTimerRunning={task.isTimerRunning} lastTimerStart={task.lastTimerStart} />
+            <div className="flex gap-6 items-start min-w-max">
+              {COLUMNS.map(col => (
+                <div key={col.id} onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDrop(e, col.id)} className={`w-80 flex flex-col rounded-xl border ${col.color} min-h-[70vh]`}>
+                  <div className="p-4 font-semibold border-b bg-white/50">{col.title} <span className="float-right bg-white text-slate-500 text-xs px-2 py-1 rounded-full">{tasks.filter(t => t.status === col.id).length}</span></div>
+                  <div className="p-3 space-y-3">
+                    {tasks.filter(t => t.status === col.id).map(task => (
+                      <div key={task.id} draggable onDragStart={(e) => handleDragStart(e, task.id)} onDragEnd={handleDragEnd} className="bg-white p-4 rounded-lg shadow-sm border cursor-grab hover:shadow-md">
+                        <div className="flex justify-between mb-2">
+                           <span className={`text-xs font-medium px-2 py-1 rounded-md ${PRIORITIES.find(p => p.id === task.priority)?.color}`}>{PRIORITIES.find(p => p.id === task.priority)?.label}</span>
+                           <button onClick={() => setTasks(tasks.filter(t => t.id !== task.id))} className="text-slate-400 hover:text-red-500"><Icons.Trash /></button>
+                        </div>
+                        <h3 className="font-medium text-slate-800">{task.title}</h3>
+                        <div className="mt-4 border-t pt-3 flex justify-between items-center">
+                           <button onClick={(e) => toggleTimer(e, task.id)} className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold border ${task.isTimerRunning ? 'bg-red-50 text-red-600 border-red-200' : 'bg-slate-50 text-slate-600'}`}>
+                             {task.isTimerRunning ? <Icons.Pause /> : <Icons.Play />}
+                             <LiveTimerDisplay timeSpent={task.timeSpent} isTimerRunning={task.isTimerRunning} lastTimerStart={task.lastTimerStart} />
                            </button>
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
+                </div>
+              ))}
+            </div>
           </main>
-          
-          {/* O Modal de Edição ficará minimizado para o seu arquivo não ficar gigante! A lógica de componentes React processará tudo. */}
         </div>
       );
     }
