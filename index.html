@@ -3,15 +3,26 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Minhas Demandas</title>
+  <title>Minhas Demandas - Kanban</title>
   
+  <!-- Rastreador Visual de Erros -->
+  <script>
+    window.onerror = function(msg, url, lineNo, columnNo, error) {
+      var errorDiv = document.createElement('div');
+      errorDiv.style.cssText = 'background: #fee2e2; color: #991b1b; padding: 20px; margin: 20px; border-radius: 8px; font-family: sans-serif; border: 1px solid #f87171;';
+      errorDiv.innerHTML = '<h3>Ops! Ocorreu um erro no sistema:</h3><p><b>' + msg + '</b></p><p>Linha: ' + lineNo + '</p>';
+      document.body.prepend(errorDiv);
+      return false;
+    };
+  </script>
+
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
   <style>
-    body { background-color: #f8fafc; }
+    body { background-color: #f8fafc; font-family: ui-sans-serif, system-ui, sans-serif; }
     .custom-scrollbar::-webkit-scrollbar { width: 6px; }
     .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
@@ -21,10 +32,7 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useRef, useEffect } = React;
-
-    const SUPABASE_URL = ''; 
-    const SUPABASE_ANON_KEY = '';
+    const { useState, useEffect } = React;
 
     const COLUMNS = [
       { id: 'backlog', title: 'Backlog', color: 'bg-blue-50 border-blue-200' },
@@ -41,13 +49,12 @@
       { id: 'urgente', label: 'Urgente', color: 'bg-red-100 text-red-800' },
     ];
 
-    const TASK_TYPES = [
-      { id: 'paineis', label: 'Painéis' },
-      { id: 'rh', label: 'RH', color: 'bg-purple-100 text-purple-800' },
-      { id: 'eventos', label: 'Eventos' },
-      { id: 'grafico', label: 'Material Gráfico' },
-      { id: 'envio', label: 'Envio de Materiais' },
-    ];
+    const Icons = {
+      Plus: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>,
+      Trash: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>,
+      Play: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>,
+      Pause: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+    };
 
     const formatTime = (totalSeconds) => {
       if (!totalSeconds) return '00:00';
@@ -57,7 +64,7 @@
       return h > 0 ? `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}` : `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
     };
 
-    const LiveTimerDisplay = ({ timeSpent, isTimerRunning, lastTimerStart, className = "" }) => {
+    const LiveTimerDisplay = ({ timeSpent, isTimerRunning, lastTimerStart }) => {
       const [elapsed, setElapsed] = useState(0);
       useEffect(() => {
         let interval;
@@ -67,48 +74,39 @@
         } else { setElapsed(0); }
         return () => clearInterval(interval);
       }, [isTimerRunning, lastTimerStart]);
-      return <span className={className}>{formatTime((timeSpent || 0) + elapsed)}</span>;
-    };
-
-    const Icons = {
-      Plus: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>,
-      X: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>,
-      Play: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>,
-      Pause: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>,
-      Trash: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>,
-      Database: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path></svg>,
-      Layout: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 4v16"></path></svg>
+      return <span>{formatTime((timeSpent || 0) + elapsed)}</span>;
     };
 
     const INITIAL_TASKS = [
-      { id: 't1', title: 'Exemplo de Demanda', status: 'backlog', priority: 'media', type: 'paineis', timeSpent: 0, isTimerRunning: false, lastTimerStart: null }
+      { id: 't1', title: 'Bem-vindo ao seu Kanban!', status: 'backlog', priority: 'media', timeSpent: 0, isTimerRunning: false, lastTimerStart: null }
     ];
 
     function App() {
       const [tasks, setTasks] = useState(INITIAL_TASKS);
       const [draggedTaskId, setDraggedTaskId] = useState(null);
 
-      const toggleTimer = (e, taskId) => {
-        e.stopPropagation();
+      const toggleTimer = (taskId) => {
         setTasks(prevTasks => {
           const now = Date.now();
-          const isStarting = !prevTasks.find(t => t.id === taskId).isTimerRunning;
-          return prevTasks.map(task => {
-            if (task.id === taskId) {
+          const task = prevTasks.find(t => t.id === taskId);
+          const isStarting = !task.isTimerRunning;
+          
+          return prevTasks.map(t => {
+            if (t.id === taskId) {
               return isStarting 
-                ? { ...task, isTimerRunning: true, lastTimerStart: now } 
-                : { ...task, isTimerRunning: false, timeSpent: task.timeSpent + Math.floor((now - task.lastTimerStart) / 1000), lastTimerStart: null };
+                ? { ...t, isTimerRunning: true, lastTimerStart: now } 
+                : { ...t, isTimerRunning: false, timeSpent: t.timeSpent + Math.floor((now - t.lastTimerStart) / 1000), lastTimerStart: null };
             }
-            if (isStarting && task.isTimerRunning) {
-               return { ...task, isTimerRunning: false, timeSpent: task.timeSpent + Math.floor((now - task.lastTimerStart) / 1000), lastTimerStart: null };
+            if (isStarting && t.isTimerRunning) {
+               return { ...t, isTimerRunning: false, timeSpent: t.timeSpent + Math.floor((now - t.lastTimerStart) / 1000), lastTimerStart: null };
             }
-            return task;
+            return t;
           });
         });
       };
 
       const handleCreateTask = () => {
-        const newTask = { id: `t${Date.now()}`, title: 'Nova Demanda', status: 'backlog', priority: 'media', type: 'paineis', timeSpent: 0, isTimerRunning: false, lastTimerStart: null };
+        const newTask = { id: `t${Date.now()}`, title: 'Nova Demanda', status: 'backlog', priority: 'media', timeSpent: 0, isTimerRunning: false, lastTimerStart: null };
         setTasks([...tasks, newTask]);
       };
 
@@ -116,37 +114,48 @@
       const handleDragEnd = (e) => { e.target.classList.remove('opacity-50'); setDraggedTaskId(null); };
       const handleDrop = (e, columnId) => {
         e.preventDefault();
-        setTasks(prev => prev.map(t => t.id === draggedTaskId ? { ...t, status: columnId } : t));
-        setDraggedTaskId(null);
+        if(draggedTaskId) {
+            setTasks(prev => prev.map(t => t.id === draggedTaskId ? { ...t, status: columnId } : t));
+            setDraggedTaskId(null);
+        }
       };
 
       return (
-        <div className="min-h-screen flex flex-col text-slate-800 font-sans">
+        <div className="min-h-screen flex flex-col text-slate-800">
           <header className="bg-white shadow-sm px-6 py-4 flex justify-between items-center border-b">
-            <div className="flex items-center gap-3">
+            <div>
               <h1 className="text-2xl font-bold">Minhas Demandas</h1>
-              <span className="flex items-center gap-1 text-[10px] bg-slate-100 text-slate-500 border px-2 py-0.5 rounded-full font-bold uppercase"><Icons.Database /> Offline</span>
+              <p className="text-sm text-slate-500">Seu quadro Kanban ao vivo na internet!</p>
             </div>
-            <button onClick={handleCreateTask} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2"><Icons.Plus /> Nova Demanda</button>
+            <button onClick={handleCreateTask} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm">
+              <Icons.Plus /> Nova Demanda
+            </button>
           </header>
 
           <main className="flex-1 overflow-x-auto p-6">
             <div className="flex gap-6 items-start min-w-max">
               {COLUMNS.map(col => (
                 <div key={col.id} onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDrop(e, col.id)} className={`w-80 flex flex-col rounded-xl border ${col.color} min-h-[70vh]`}>
-                  <div className="p-4 font-semibold border-b bg-white/50">{col.title} <span className="float-right bg-white text-slate-500 text-xs px-2 py-1 rounded-full">{tasks.filter(t => t.status === col.id).length}</span></div>
-                  <div className="p-3 space-y-3">
+                  <div className="p-4 font-semibold border-b bg-white/50 flex justify-between items-center">
+                     {col.title}
+                     <span className="bg-white text-slate-500 text-xs px-2 py-1 rounded-full shadow-sm">{tasks.filter(t => t.status === col.id).length}</span>
+                  </div>
+                  <div className="p-3 space-y-3 custom-scrollbar">
                     {tasks.filter(t => t.status === col.id).map(task => (
-                      <div key={task.id} draggable onDragStart={(e) => handleDragStart(e, task.id)} onDragEnd={handleDragEnd} className="bg-white p-4 rounded-lg shadow-sm border cursor-grab hover:shadow-md">
-                        <div className="flex justify-between mb-2">
-                           <span className={`text-xs font-medium px-2 py-1 rounded-md ${PRIORITIES.find(p => p.id === task.priority)?.color}`}>{PRIORITIES.find(p => p.id === task.priority)?.label}</span>
-                           <button onClick={() => setTasks(tasks.filter(t => t.id !== task.id))} className="text-slate-400 hover:text-red-500"><Icons.Trash /></button>
+                      <div key={task.id} draggable onDragStart={(e) => handleDragStart(e, task.id)} onDragEnd={handleDragEnd} className="bg-white p-4 rounded-lg shadow-sm border border-slate-200 cursor-grab hover:shadow-md">
+                        <div className="flex justify-between items-start mb-2">
+                           <span className={`text-xs font-medium px-2 py-1 rounded-md ${PRIORITIES.find(p => p.id === task.priority)?.color}`}>
+                             {PRIORITIES.find(p => p.id === task.priority)?.label}
+                           </span>
+                           <button onClick={() => setTasks(tasks.filter(t => t.id !== task.id))} className="text-slate-400 hover:text-red-500 hover:bg-red-50 p-1 rounded"><Icons.Trash /></button>
                         </div>
-                        <h3 className="font-medium text-slate-800">{task.title}</h3>
-                        <div className="mt-4 border-t pt-3 flex justify-between items-center">
-                           <button onClick={(e) => toggleTimer(e, task.id)} className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold border ${task.isTimerRunning ? 'bg-red-50 text-red-600 border-red-200' : 'bg-slate-50 text-slate-600'}`}>
+                        <h3 className="font-medium text-slate-800 leading-snug">{task.title}</h3>
+                        <div className="mt-4 pt-3 border-t border-slate-50 flex justify-end">
+                           <button onClick={(e) => toggleTimer(task.id)} className={`flex items-center gap-1 px-2 py-1.5 rounded text-xs font-semibold border ${task.isTimerRunning ? 'bg-red-50 text-red-600 border-red-200' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
                              {task.isTimerRunning ? <Icons.Pause /> : <Icons.Play />}
-                             <LiveTimerDisplay timeSpent={task.timeSpent} isTimerRunning={task.isTimerRunning} lastTimerStart={task.lastTimerStart} />
+                             <span className="w-[45px] text-right font-mono">
+                                <LiveTimerDisplay timeSpent={task.timeSpent} isTimerRunning={task.isTimerRunning} lastTimerStart={task.lastTimerStart} />
+                             </span>
                            </button>
                         </div>
                       </div>
