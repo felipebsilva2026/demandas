@@ -5,9 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Minhas Demandas - Kanban</title>
   
-  <!-- Tailwind CSS para Design Moderno -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- FontAwesome para Ícones Modernos -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
   <style>
@@ -24,12 +22,11 @@
     <div>
       <div class="flex items-center gap-3">
          <h1 class="text-2xl font-bold text-slate-800">Minhas Demandas</h1>
-         <span class="flex items-center gap-1 text-[10px] bg-emerald-50 text-emerald-600 border border-emerald-200 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
-            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            Auto-Salvar Ativo
+         <span id="cloud-status" class="flex items-center gap-1 text-[10px] bg-slate-100 text-slate-500 border border-slate-200 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+            Conectando ao Drive...
          </span>
       </div>
-      <p class="text-sm text-slate-500">Gerenciador de demandas com banco de dados local automático</p>
+      <p class="text-sm text-slate-500">Integrado ao Google Sheets</p>
     </div>
 
     <!-- Navegação de Abas -->
@@ -48,7 +45,7 @@
   </header>
 
   <main class="flex-1 overflow-x-auto p-6" id="main-content">
-    <!-- O conteúdo do Kanban ou dos Relatórios será injetado aqui pelo JavaScript -->
+    <!-- O conteúdo do Kanban ou dos Relatórios será injetado aqui -->
   </main>
 
   <!-- Modais -->
@@ -56,6 +53,11 @@
   <div id="delete-modal" class="hidden fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex justify-center items-center p-4"></div>
 
   <script>
+    // ==========================================
+    // 🔗 COLE O SEU LINK DA PLANILHA AQUI ABAIXO
+    // ==========================================
+    const GOOGLE_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbzD3PTDA9DZHi3o0kGHHgXKhy-YGMwrFHjy9iXkFzENd97wTJFbuQlK1-RoM5WKBOOR0A/exec';
+
     // Configurações e Arrays Globais
     const COLUMNS = [
       { id: 'backlog', title: 'Backlog', color: 'bg-blue-50 border-blue-200', textCol: 'text-blue-700' },
@@ -80,29 +82,57 @@
       { id: 'envio', label: 'Envio de Materiais' },
     ];
 
-    // Carregamento Inicial do LocalStorage (Banco de dados local do navegador)
-    const FALLBACK_TASKS = [
-      {
-        id: 't1', parentId: null, title: 'Criar protótipo da tela inicial', status: 'desenvolvimento',
-        priority: 'alta', type: 'paineis', startDate: '2026-06-20', endDate: '2026-06-25',
-        description: 'Desenvolver o wireframe e o design para a nova tela inicial.',
-        comments: [{ id: 'c1', text: 'O design precisa seguir o novo guia de estilos.', date: '2026-06-21T10:00:00' }],
-        attachments: [{ id: 'a1', name: 'guia-de-estilos.pdf' }],
-        timeSpent: 3600, isTimerRunning: false, lastTimerStart: null
-      }
-    ];
-
-    let tasks = JSON.parse(localStorage.getItem('kanban_tasks')) || FALLBACK_TASKS;
+    let tasks = [];
     let activeTab = 'kanban';
     let draggedTaskId = null;
     let modalStack = [];
     let expandedCards = {};
     let taskToDeleteId = null;
 
-    // Salvamento Automático
+    // Carregamento e Sincronização Inteligente
+    async function loadData() {
+      // 1. Carrega o que tem no PC para a tela não ficar branca
+      const localData = localStorage.getItem('kanban_tasks');
+      if (localData) {
+        tasks = JSON.parse(localData);
+        render();
+      }
+
+      // 2. Busca na Planilha as informações mais atualizadas
+      if (GOOGLE_SHEETS_URL && GOOGLE_SHEETS_URL.includes('script.google.com')) {
+        try {
+          const response = await fetch(GOOGLE_SHEETS_URL);
+          const cloudData = await response.json();
+          
+          if (cloudData && cloudData.length > 0) {
+            tasks = cloudData;
+            localStorage.setItem('kanban_tasks', JSON.stringify(tasks));
+            render();
+          }
+
+          // Atualiza o crachá de Status na tela
+          const badge = document.getElementById('cloud-status');
+          badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Sincronizado com Drive';
+          badge.className = 'flex items-center gap-1 text-[10px] bg-emerald-50 text-emerald-600 border border-emerald-200 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider';
+        } catch (error) {
+          console.log("Trabalhando offline no momento.");
+        }
+      }
+    }
+
     function saveState() {
+      // Salva instantaneamente no navegador (Zero travamentos)
       localStorage.setItem('kanban_tasks', JSON.stringify(tasks));
       render();
+
+      // Salva "escondido" na Planilha em segundo plano
+      if (GOOGLE_SHEETS_URL && GOOGLE_SHEETS_URL.includes('script.google.com')) {
+        fetch(GOOGLE_SHEETS_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // Formato seguro para o Google não bloquear
+          body: JSON.stringify(tasks)
+        }).catch(err => console.log('Sincronização em background falhou, aguardando próxima...'));
+      }
     }
 
     // Formatador de tempo (Segundos para HH:MM:SS)
@@ -127,13 +157,12 @@
         return task;
       });
       if (updated) {
-        localStorage.setItem('kanban_tasks', JSON.stringify(tasks));
+        localStorage.setItem('kanban_tasks', JSON.stringify(tasks)); // Apenas salva local para não esgotar a cota do Google
         updateTimerElements();
       }
     }, 1000);
 
     function updateTimerElements() {
-      // Atualiza os cronômetros na tela sem precisar redesenhar tudo
       document.querySelectorAll('[data-timer-id]').forEach(elem => {
         const id = elem.getAttribute('data-timer-id');
         const task = tasks.find(t => t.id === id);
@@ -167,7 +196,7 @@
         }
         return task;
       });
-      saveState();
+      saveState(); // Ao pausar/iniciar, o backup na Planilha é ativado
     };
 
     function handleCreateTask(parentId = null) {
@@ -188,9 +217,8 @@
         lastTimerStart: null,
       };
       tasks.push(newTask);
-      localStorage.setItem('kanban_tasks', JSON.stringify(tasks));
       openTask(newTask.id);
-      render();
+      saveState();
     }
 
     function openTask(id) {
@@ -226,10 +254,10 @@
       deleteModal.innerHTML = `
         <div class="bg-white rounded-xl shadow-xl max-w-sm w-full p-6">
           <h3 class="text-lg font-bold text-slate-800 mb-2">Excluir Demanda?</h3>
-          <p class="text-sm text-slate-600 mb-6">Esta ação removerá a demanda e todas as suas possíveis subtarefas permanentemente.</p>
+          <p class="text-sm text-slate-600 mb-6">Esta ação removerá a demanda permanentemente da sua planilha.</p>
           <div class="flex justify-end gap-3">
-            <button onclick="closeDeleteModal()" class="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">Cancelar</button>
-            <button onclick="executeDelete()" class="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors">Excluir</button>
+            <button onclick="closeDeleteModal()" class="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button>
+            <button onclick="executeDelete()" class="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg">Excluir</button>
           </div>
         </div>
       `;
@@ -274,20 +302,14 @@
       render();
     }
 
-    // Função Principal de Renderização
     function render() {
       const container = document.getElementById('main-content');
-      if (activeTab === 'kanban') {
-        renderBoard(container);
-      } else {
-        renderReports(container);
-      }
+      if (activeTab === 'kanban') renderBoard(container);
+      else renderReports(container);
     }
 
-    // Renderiza o Quadro Kanban
     function renderBoard(container) {
       let html = `<div class="flex gap-6 h-full items-start min-w-max">`;
-      
       COLUMNS.forEach(col => {
         const colTasks = tasks.filter(t => !t.parentId && t.status === col.id);
         html += `
@@ -327,370 +349,110 @@
                 </div>
             `;
 
-            // Subtarefas resumidas no Card
             if (subtasks.length > 0) {
               const isExpanded = expandedCards[task.id];
-              html += `
-                <div class="mt-3 pt-3 border-t border-slate-100">
-                  <button onclick="toggleExpandCard(event, '${task.id}')" class="flex items-center gap-1 text-xs text-slate-500 font-medium hover:text-slate-700 w-full">
-                    <i class="fa-solid ${isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'}"></i>
-                    ${subtasks.length} Subtarefas
-                  </button>
-              `;
+              html += `<div class="mt-3 pt-3 border-t border-slate-100"><button onclick="toggleExpandCard(event, '${task.id}')" class="flex items-center gap-1 text-xs text-slate-500 font-medium hover:text-slate-700 w-full"><i class="fa-solid ${isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'}"></i>${subtasks.length} Subtarefas</button>`;
               if (isExpanded) {
                 html += `<div class="mt-2 space-y-2">`;
                 subtasks.forEach(sub => {
-                  html += `
-                    <div onclick="event.stopPropagation(); openTask('${sub.id}')" class="flex items-center justify-between p-2 bg-slate-50 rounded-md border border-slate-200 hover:border-blue-300 transition-colors group/sub">
-                      <div class="flex items-center gap-2 overflow-hidden">
-                        <i class="fa-solid fa-arrow-turn-up rotate-90 text-slate-400 text-[10px]"></i>
-                        <span class="text-xs font-medium text-slate-700 truncate">${sub.title}</span>
-                      </div>
-                      <span class="text-[9px] bg-white px-1.5 py-0.5 rounded shadow-sm border border-slate-100 text-slate-500 font-bold uppercase">
-                        ${COLUMNS.find(c => c.id === sub.status)?.title.split(' ')[0] || '...'}
-                      </span>
-                    </div>
-                  `;
+                  html += `<div onclick="event.stopPropagation(); openTask('${sub.id}')" class="flex items-center justify-between p-2 bg-slate-50 rounded-md border border-slate-200 hover:border-blue-300 transition-colors"><div class="flex items-center gap-2 overflow-hidden"><i class="fa-solid fa-arrow-turn-up rotate-90 text-slate-400 text-[10px]"></i><span class="text-xs font-medium text-slate-700 truncate">${sub.title}</span></div><span class="text-[9px] bg-white px-1.5 py-0.5 rounded shadow-sm border border-slate-100 text-slate-500 font-bold uppercase">${COLUMNS.find(c => c.id === sub.status)?.title.split(' ')[0] || '...'}</span></div>`;
                 });
                 html += `</div>`;
               }
               html += `</div>`;
             }
-
             html += `</div>`;
           });
         }
-
         html += `</div></div>`;
       });
-
       html += `</div>`;
       container.innerHTML = html;
       updateTimerElements();
     }
 
-    // Renderiza a Aba de Relatórios
     function renderReports(container) {
       const totalTasks = tasks.length;
-      const parentTasks = tasks.filter(t => !t.parentId).length;
-      const subTasksCount = tasks.filter(t => t.parentId).length;
-      const activeTimersCount = tasks.filter(t => t.isTimerRunning).length;
-      
-      const getLiveTime = (task) => {
-        let elapsed = 0;
-        if (task.isTimerRunning && task.lastTimerStart) {
-          elapsed = Math.floor((Date.now() - task.lastTimerStart) / 1000);
-        }
-        return (task.timeSpent || 0) + elapsed;
-      };
-      
+      const getLiveTime = (task) => task.timeSpent + (task.isTimerRunning && task.lastTimerStart ? Math.floor((Date.now() - task.lastTimerStart) / 1000) : 0);
       const totalTimeSpent = tasks.reduce((acc, t) => acc + getLiveTime(t), 0);
 
-      let html = `
-        <div class="max-w-6xl mx-auto space-y-6 pb-12">
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-              <span class="text-sm font-semibold text-slate-500 uppercase tracking-wider block mb-1">Total de Demandas</span>
-              <div class="flex items-baseline gap-2">
-                <span class="text-4xl font-bold text-blue-600">${totalTasks}</span>
-                <span class="text-sm text-slate-400">(${parentTasks} principais, ${subTasksCount} subtarefas)</span>
-              </div>
-            </div>
-            
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-              <span class="text-sm font-semibold text-slate-500 uppercase tracking-wider block mb-1">Tempo Total Gasto</span>
-              <span class="text-4xl font-bold text-indigo-600 font-mono">${formatTime(totalTimeSpent)}</span>
-            </div>
-
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-              <span class="text-sm font-semibold text-slate-500 uppercase tracking-wider block mb-1">Cronômetros Ativos</span>
-              <span class="text-4xl font-bold text-red-500">${activeTimersCount}</span>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <!-- Gráficos de barras limpos em Tailwind -->
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-              <h3 class="text-lg font-bold text-slate-800 mb-6"><i class="fa-solid fa-list-check mr-2"></i>Distribuição por Estágio</h3>
-              <div class="space-y-4">
-      `;
+      let html = `<div class="max-w-6xl mx-auto space-y-6 pb-12"><div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200"><span class="text-sm font-semibold text-slate-500 uppercase tracking-wider block mb-1">Total de Demandas</span><span class="text-4xl font-bold text-blue-600">${totalTasks}</span></div>
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200"><span class="text-sm font-semibold text-slate-500 uppercase tracking-wider block mb-1">Tempo Total Gasto</span><span class="text-4xl font-bold text-indigo-600 font-mono">${formatTime(totalTimeSpent)}</span></div>
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200"><span class="text-sm font-semibold text-slate-500 uppercase tracking-wider block mb-1">Cronômetros Ativos</span><span class="text-4xl font-bold text-red-500">${tasks.filter(t => t.isTimerRunning).length}</span></div>
+          </div><div class="grid grid-cols-1 lg:grid-cols-2 gap-6"><div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200"><h3 class="text-lg font-bold text-slate-800 mb-6"><i class="fa-solid fa-list-check mr-2"></i>Distribuição por Estágio</h3><div class="space-y-4">`;
 
       COLUMNS.forEach(col => {
         const count = tasks.filter(t => t.status === col.id).length;
         const pct = totalTasks > 0 ? Math.round((count / totalTasks) * 100) : 0;
-        html += `
-          <div>
-            <div class="flex justify-between items-center mb-1 text-sm font-medium text-slate-700">
-              <span>${col.title}</span>
-              <span>${count} (${pct}%)</span>
-            </div>
-            <div class="w-full bg-slate-100 rounded-full h-2">
-              <div class="bg-blue-600 h-full rounded-full transition-all" style="width: ${pct}%"></div>
-            </div>
-          </div>
-        `;
+        html += `<div><div class="flex justify-between items-center mb-1 text-sm font-medium text-slate-700"><span>${col.title}</span><span>${count} (${pct}%)</span></div><div class="w-full bg-slate-100 rounded-full h-2"><div class="bg-blue-600 h-full rounded-full transition-all" style="width: ${pct}%"></div></div></div>`;
       });
 
-      html += `
-              </div>
-            </div>
-
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-              <h3 class="text-lg font-bold text-slate-800 mb-6"><i class="fa-solid fa-tags mr-2"></i>Métricas por Tipo</h3>
-              <div class="space-y-4">
-      `;
+      html += `</div></div><div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200"><h3 class="text-lg font-bold text-slate-800 mb-6"><i class="fa-solid fa-tags mr-2"></i>Métricas por Tipo</h3><div class="space-y-4">`;
 
       TASK_TYPES.forEach(type => {
         const typeTasks = tasks.filter(t => t.type === type.id);
         const count = typeTasks.length;
         const pct = totalTasks > 0 ? Math.round((count / totalTasks) * 100) : 0;
-        const timeSpent = typeTasks.reduce((acc, t) => acc + getLiveTime(t), 0);
-        
-        html += `
-          <div>
-            <div class="flex justify-between items-center mb-1 text-sm font-medium text-slate-700">
-              <span>${type.label}</span>
-              <div class="text-right">
-                <span class="text-slate-500 text-xs">${count} (${pct}%)</span>
-                <span class="text-indigo-500 font-mono text-xs block">${formatTime(timeSpent)}</span>
-              </div>
-            </div>
-            <div class="w-full bg-slate-100 rounded-full h-2">
-              <div class="bg-indigo-500 h-full rounded-full transition-all" style="width: ${pct}%"></div>
-            </div>
-          </div>
-        `;
+        html += `<div><div class="flex justify-between items-center mb-1 text-sm font-medium text-slate-700"><span>${type.label}</span><span>${count} (${pct}%)</span></div><div class="w-full bg-slate-100 rounded-full h-2"><div class="bg-indigo-500 h-full rounded-full transition-all" style="width: ${pct}%"></div></div></div>`;
       });
 
       html += `</div></div></div></div>`;
       container.innerHTML = html;
     }
 
-    // Renderiza e gerencia os Modais Empilhados
     function renderModal() {
       const container = document.getElementById('modal-container');
-      if (modalStack.length === 0) {
-        container.classList.add('hidden');
-        container.innerHTML = '';
-        return;
-      }
-
+      if (modalStack.length === 0) { container.classList.add('hidden'); container.innerHTML = ''; return; }
       const activeId = modalStack[modalStack.length - 1];
       const task = tasks.find(t => t.id === activeId);
       if (!task) return;
-
       const subtasks = tasks.filter(t => t.parentId === task.id);
 
       container.innerHTML = `
         <div class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex justify-center items-start overflow-y-auto p-4 sm:p-6" onclick="closeAllModals()">
           <div class="bg-white w-full max-w-3xl rounded-2xl shadow-2xl mt-10 mb-10 flex flex-col overflow-hidden animate-in fade-in duration-200" onclick="event.stopPropagation()">
-            
-            <!-- Modal Header -->
             <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <div class="flex items-center gap-4">
-                ${modalStack.length > 1 ? `<button onclick="closeTask()" class="p-2 hover:bg-slate-200 rounded-lg text-slate-500"><i class="fa-solid fa-arrow-left"></i> Voltar</button>` : ''}
+                ${modalStack.length > 1 ? `<button onclick="closeTask()" class="p-2 hover:bg-slate-200 rounded-lg text-slate-500"><i class="fa-solid fa-arrow-left"></i></button>` : ''}
                 <span class="text-sm font-bold text-slate-500 uppercase tracking-wider">${task.parentId ? 'Subtarefa' : 'Demanda'}</span>
-                
-                <button onclick="toggleTimer(event, '${task.id}')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-semibold transition-colors border shadow-sm ${task.isTimerRunning ? 'bg-red-50 text-red-600 border-red-200' : 'bg-white text-slate-700 border-slate-200'}">
-                  <i class="fa-solid ${task.isTimerRunning ? 'fa-pause animate-pulse' : 'fa-play'}"></i>
-                  <span data-timer-id="${task.id}" class="font-mono">${formatTime(task.timeSpent)}</span>
-                </button>
               </div>
-              <div class="flex items-center gap-2">
-                <button onclick="confirmDelete(event, '${task.id}')" class="p-2 text-red-500 hover:bg-red-50 rounded-lg"><i class="fa-regular fa-trash-can"></i></button>
-                <button onclick="closeAllModals()" class="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 rounded-lg"><i class="fa-solid fa-xmark"></i></button>
-              </div>
+              <button onclick="closeAllModals()" class="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 rounded-lg"><i class="fa-solid fa-xmark"></i></button>
             </div>
-
-            <!-- Modal Body -->
             <div class="p-6 md:p-8 flex-1 overflow-y-auto space-y-6">
-              
-              <!-- Título -->
-              <div>
-                <input type="text" id="modal-task-title" onblur="updateTaskField('${task.id}', 'title', this.value)" class="w-full text-2xl font-bold text-slate-800 border-none outline-none focus:ring-0 placeholder-slate-300" value="${task.title}" placeholder="Título da demanda...">
-              </div>
-
-              <!-- Grid de Propriedades -->
+              <div><input type="text" onblur="updateTaskField('${task.id}', 'title', this.value)" class="w-full text-2xl font-bold text-slate-800 border-none outline-none focus:ring-0" value="${task.title}" placeholder="Título..."></div>
               <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 bg-slate-50 p-5 rounded-xl border border-slate-100">
-                <div>
-                  <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Estágio</label>
-                  <select onchange="updateTaskField('${task.id}', 'status', this.value)" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none">
-                    ${COLUMNS.map(col => `<option value="${col.id}" ${task.status === col.id ? 'selected' : ''}>${col.title}</option>`).join('')}
-                  </select>
-                </div>
-
-                <div>
-                  <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Prioridade</label>
-                  <select onchange="updateTaskField('${task.id}', 'priority', this.value)" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none">
-                    ${PRIORITIES.map(p => `<option value="${p.id}" ${task.priority === p.id ? 'selected' : ''}>${p.label}</option>`).join('')}
-                  </select>
-                </div>
-
-                <div>
-                  <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Tipo de Demanda</label>
-                  <select onchange="updateTaskField('${task.id}', 'type', this.value)" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none">
-                    ${TASK_TYPES.map(t => `<option value="${t.id}" ${task.type === t.id ? 'selected' : ''}>${t.label}</option>`).join('')}
-                  </select>
-                </div>
-
-                <div>
-                  <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Data de Início</label>
-                  <input type="date" onchange="updateTaskField('${task.id}', 'startDate', this.value)" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none" value="${task.startDate || ''}">
-                </div>
-
-                <div>
-                  <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Data de Conclusão</label>
-                  <input type="date" onchange="updateTaskField('${task.id}', 'endDate', this.value)" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none" value="${task.endDate || ''}">
-                </div>
+                <div><label class="block text-xs font-semibold text-slate-500 uppercase mb-2">Estágio</label><select onchange="updateTaskField('${task.id}', 'status', this.value)" class="w-full bg-white border rounded-lg px-3 py-2 text-sm">${COLUMNS.map(c => `<option value="${c.id}" ${task.status === c.id ? 'selected' : ''}>${c.title}</option>`).join('')}</select></div>
+                <div><label class="block text-xs font-semibold text-slate-500 uppercase mb-2">Prioridade</label><select onchange="updateTaskField('${task.id}', 'priority', this.value)" class="w-full bg-white border rounded-lg px-3 py-2 text-sm">${PRIORITIES.map(p => `<option value="${p.id}" ${task.priority === p.id ? 'selected' : ''}>${p.label}</option>`).join('')}</select></div>
+                <div><label class="block text-xs font-semibold text-slate-500 uppercase mb-2">Tipo</label><select onchange="updateTaskField('${task.id}', 'type', this.value)" class="w-full bg-white border rounded-lg px-3 py-2 text-sm">${TASK_TYPES.map(t => `<option value="${t.id}" ${task.type === t.id ? 'selected' : ''}>${t.label}</option>`).join('')}</select></div>
+                <div><label class="block text-xs font-semibold text-slate-500 uppercase mb-2">Início</label><input type="date" onchange="updateTaskField('${task.id}', 'startDate', this.value)" class="w-full bg-white border rounded-lg px-3 py-2 text-sm" value="${task.startDate || ''}"></div>
+                <div><label class="block text-xs font-semibold text-slate-500 uppercase mb-2">Conclusão</label><input type="date" onchange="updateTaskField('${task.id}', 'endDate', this.value)" class="w-full bg-white border rounded-lg px-3 py-2 text-sm" value="${task.endDate || ''}"></div>
               </div>
-
-              <!-- Subtarefas -->
+              
               <div class="border border-slate-200 rounded-xl overflow-hidden">
-                <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-                  <label class="block text-sm font-semibold text-slate-800">Subtarefas (${subtasks.length})</label>
-                  <button onclick="handleCreateTask('${task.id}')" class="text-sm bg-white hover:bg-slate-100 text-blue-600 border border-slate-200 px-3 py-1.5 rounded-lg flex items-center gap-2 font-medium shadow-sm"><i class="fa-solid fa-plus"></i> Criar Subtarefa</button>
-                </div>
-                <div class="p-2 space-y-1">
-                  ${subtasks.length > 0 ? subtasks.map(sub => `
-                    <div onclick="openTask('${sub.id}')" class="flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 cursor-pointer group border border-transparent hover:border-slate-200 transition-all">
-                      <div class="flex items-center gap-3">
-                        <div class="w-2 h-2 rounded-full ${sub.status === 'cancelados' ? 'bg-slate-400' : 'bg-blue-500'}"></div>
-                        <span class="text-sm font-medium text-slate-700 group-hover:text-blue-700">${sub.title}</span>
-                      </div>
-                      <div class="flex items-center gap-4">
-                        <span class="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded border">${COLUMNS.find(c => c.id === sub.status)?.title || '...'}</span>
-                      </div>
-                    </div>
-                  `).join('') : '<div class="p-4 text-center text-sm text-slate-400 italic">Nenhuma subtarefa criada.</div>'}
-                </div>
+                <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50"><label class="text-sm font-semibold text-slate-800">Subtarefas (${subtasks.length})</label><button onclick="handleCreateTask('${task.id}')" class="text-sm text-blue-600 bg-white border px-3 py-1.5 rounded-lg"><i class="fa-solid fa-plus"></i></button></div>
+                <div class="p-2 space-y-1">${subtasks.map(sub => `<div onclick="openTask('${sub.id}')" class="flex justify-between p-3 rounded-lg hover:bg-slate-50 cursor-pointer border hover:border-slate-200"><span class="text-sm text-slate-700">${sub.title}</span><span class="text-xs bg-slate-100 px-2 py-1 rounded">${COLUMNS.find(c => c.id === sub.status)?.title || '...'}</span></div>`).join('')}</div>
               </div>
 
-              <!-- Descrição -->
-              <div class="space-y-3">
-                <label class="block text-sm font-semibold text-slate-800">Descrição da Demanda</label>
-                <textarea onblur="updateTaskField('${task.id}', 'description', this.value)" placeholder="Adicione uma descrição mais detalhada..." class="w-full min-h-[120px] bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:bg-white focus:border-blue-500 transition-all resize-y">${task.description || ''}</textarea>
-              </div>
-
-              <!-- Anexos -->
-              <div class="space-y-3">
-                <div class="flex items-center justify-between">
-                  <label class="block text-sm font-semibold text-slate-800">Anexos (${task.attachments?.length || 0})</label>
-                  <button onclick="document.getElementById('file-upload').click()" class="text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg flex items-center gap-2 font-medium transition-colors"><i class="fa-solid fa-paperclip"></i> Incluir documento</button>
-                  <input type="file" id="file-upload" class="hidden" onchange="handleAttachFile(event, '${task.id}')">
-                </div>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  ${task.attachments?.length > 0 ? task.attachments.map(att => `
-                    <div class="flex items-center justify-between bg-slate-50 border border-slate-200 p-3 rounded-lg group">
-                      <div class="flex items-center gap-3 overflow-hidden">
-                        <div class="p-2 bg-blue-100 text-blue-600 rounded-md"><i class="fa-solid fa-paperclip"></i></div>
-                        <span class="text-sm text-slate-700 truncate">${att.name}</span>
-                      </div>
-                      <button onclick="removeAttachment('${task.id}', '${att.id}')" class="text-slate-400 hover:text-red-500 p-1"><i class="fa-solid fa-xmark"></i></button>
-                    </div>
-                  `).join('') : '<p class="text-sm text-slate-400 italic">Nenhum documento anexado.</p>'}
-                </div>
-              </div>
-
-              <!-- Comentários -->
+              <div class="space-y-3"><label class="block text-sm font-semibold text-slate-800">Descrição</label><textarea onblur="updateTaskField('${task.id}', 'description', this.value)" class="w-full min-h-[120px] bg-slate-50 border rounded-xl px-4 py-3 text-sm">${task.description || ''}</textarea></div>
+              
               <div class="space-y-3 pt-6 border-t border-slate-100">
                 <label class="block text-sm font-semibold text-slate-800">Comentários</label>
-                <div class="space-y-4">
-                  ${task.comments?.length > 0 ? task.comments.map(c => `
-                    <div class="flex gap-4">
-                      <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-sm">U</div>
-                      <div class="flex-1 bg-slate-50 border border-slate-100 p-3 rounded-tr-xl rounded-b-xl relative">
-                        <div class="flex justify-between items-center mb-1">
-                          <span class="text-xs font-semibold text-slate-700">Você</span>
-                          <div class="flex items-center gap-2">
-                             <span class="text-xs text-slate-400">${new Date(c.date).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
-                             <button onclick="deleteComment('${task.id}', '${c.id}')" class="text-slate-400 hover:text-red-500 text-xs"><i class="fa-regular fa-trash-can"></i></button>
-                          </div>
-                        </div>
-                        <p class="text-sm text-slate-600 whitespace-pre-wrap">${c.text}</p>
-                      </div>
-                    </div>
-                  `).join('') : '<p class="text-sm text-slate-400 italic">Sem comentários até o momento.</p>'}
-                </div>
-                
-                <div class="flex gap-3 pt-4">
-                  <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm">U</div>
-                  <div class="flex-1 flex flex-col items-end gap-2">
-                    <textarea id="comment-text-input" placeholder="Escreva um comentário..." class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-blue-500 transition-all resize-none h-20"></textarea>
-                    <button onclick="addComment('${task.id}')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium">Comentar</button>
-                  </div>
-                </div>
+                <div class="space-y-4">${task.comments?.map(c => `<div class="flex gap-4"><div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-sm">U</div><div class="flex-1 bg-slate-50 border p-3 rounded-tr-xl rounded-b-xl"><div class="flex justify-between mb-1"><span class="text-xs font-semibold">Você</span><button onclick="deleteComment('${task.id}', '${c.id}')" class="text-slate-400 hover:text-red-500"><i class="fa-solid fa-trash"></i></button></div><p class="text-sm text-slate-600">${c.text}</p></div></div>`).join('') || ''}</div>
+                <div class="flex gap-3 pt-4"><div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm">U</div><div class="flex-1 flex flex-col items-end gap-2"><textarea id="comment-text-input" class="w-full bg-white border rounded-xl px-4 py-3 text-sm h-20"></textarea><button onclick="addComment('${task.id}')" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm">Comentar</button></div></div>
               </div>
-
             </div>
           </div>
-        </div>
-      `;
+        </div>`;
       container.classList.remove('hidden');
     }
 
-    // Funções de Eventos de Inputs do Modal (Salva as alterações de volta no array global)
-    function updateTaskField(id, field, value) {
-      tasks = tasks.map(t => t.id === id ? { ...t, [field]: value } : t);
-      saveState();
-    }
+    function updateTaskField(id, field, value) { tasks = tasks.map(t => t.id === id ? { ...t, [field]: value } : t); saveState(); }
+    function addComment(taskId) { const text = document.getElementById('comment-text-input').value.trim(); if (!text) return; tasks = tasks.map(t => t.id === taskId ? { ...t, comments: [...(t.comments || []), { id: `c${Date.now()}`, text, date: new Date().toISOString() }] } : t); saveState(); renderModal(); }
+    function deleteComment(taskId, commentId) { tasks = tasks.map(t => t.id === taskId ? { ...t, comments: t.comments.filter(c => c.id !== commentId) } : t); saveState(); renderModal(); }
 
-    function addComment(taskId) {
-      const input = document.getElementById('comment-text-input');
-      const text = input.value.trim();
-      if (!text) return;
-
-      tasks = tasks.map(t => {
-        if (t.id === taskId) {
-          const comments = t.comments || [];
-          comments.push({ id: `c${Date.now()}`, text, date: new Date().toISOString() });
-          return { ...t, comments };
-        }
-        return t;
-      });
-      saveState();
-      renderModal();
-    }
-
-    function deleteComment(taskId, commentId) {
-      tasks = tasks.map(t => {
-        if (t.id === taskId) {
-          return { ...t, comments: t.comments.filter(c => c.id !== commentId) };
-        }
-        return t;
-      });
-      saveState();
-      renderModal();
-    }
-
-    function handleAttachFile(e, taskId) {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      tasks = tasks.map(t => {
-        if (t.id === taskId) {
-          const attachments = t.attachments || [];
-          attachments.push({ id: `a${Date.now()}`, name: file.name });
-          return { ...t, attachments };
-        }
-        return t;
-      });
-      saveState();
-      renderModal();
-    }
-
-    function removeAttachment(taskId, attId) {
-      tasks = tasks.map(t => {
-        if (t.id === taskId) {
-          return { ...t, attachments: t.attachments.filter(a => a.id !== attId) };
-        }
-        return t;
-      });
-      saveState();
-      renderModal();
-    }
-
-    // Inicialização da Tela
-    render();
+    // Iniciar a Aplicação e puxar do Drive
+    window.onload = loadData;
   </script>
 </body>
 </html>
