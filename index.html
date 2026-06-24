@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Minhas Demandas - Kanban</title>
   
+  <!-- Tailwind CSS para Design Moderno -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
+  <!-- FontAwesome para Ícones Modernos -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
   <style>
     body { background-color: #f8fafc; font-family: ui-sans-serif, system-ui, sans-serif; }
     .custom-scrollbar::-webkit-scrollbar { width: 6px; }
@@ -17,14 +17,48 @@
     .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
   </style>
 </head>
-<body>
-  <div id="root"></div>
+<body class="min-h-screen flex flex-col bg-slate-50 text-slate-800">
 
-  <script type="text/babel">
-    const { useState, useEffect } = React;
+  <!-- Header Principal -->
+  <header class="bg-white shadow-sm px-6 py-4 flex flex-col sm:flex-row sm:justify-between sm:items-center border-b border-slate-200 gap-4">
+    <div>
+      <div class="flex items-center gap-3">
+         <h1 class="text-2xl font-bold text-slate-800">Minhas Demandas</h1>
+         <span class="flex items-center gap-1 text-[10px] bg-emerald-50 text-emerald-600 border border-emerald-200 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            Auto-Salvar Ativo
+         </span>
+      </div>
+      <p class="text-sm text-slate-500">Gerenciador de demandas com banco de dados local automático</p>
+    </div>
 
+    <!-- Navegação de Abas -->
+    <div class="flex bg-slate-100 p-1 rounded-lg">
+      <button id="btn-tab-kanban" onclick="switchTab('kanban')" class="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors bg-white text-blue-600 shadow-sm">
+        <i class="fa-solid fa-table-columns"></i> Quadro
+      </button>
+      <button id="btn-tab-reports" onclick="switchTab('reports')" class="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors text-slate-500 hover:text-slate-700">
+        <i class="fa-solid fa-chart-simple"></i> Relatórios
+      </button>
+    </div>
+
+    <button onclick="handleCreateTask(null)" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow-sm flex items-center justify-center gap-2 transition-colors font-medium">
+      <i class="fa-solid fa-plus"></i> Nova Demanda
+    </button>
+  </header>
+
+  <main class="flex-1 overflow-x-auto p-6" id="main-content">
+    <!-- O conteúdo do Kanban ou dos Relatórios será injetado aqui pelo JavaScript -->
+  </main>
+
+  <!-- Modais -->
+  <div id="modal-container" class="hidden"></div>
+  <div id="delete-modal" class="hidden fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex justify-center items-center p-4"></div>
+
+  <script>
+    // Configurações e Arrays Globais
     const COLUMNS = [
-      { id: 'backlog', title: 'Backlog', color: 'bg-blue-50 border-blue-200' },
+      { id: 'backlog', title: 'Backlog', color: 'bg-blue-50 border-blue-200', textCol: 'text-blue-700' },
       { id: 'desenvolvimento', title: 'Em desenvolvimento', color: 'bg-sky-50 border-sky-200' },
       { id: 'aprovacao', title: 'Em aprovação', color: 'bg-indigo-50 border-indigo-200' },
       { id: 'pendencias', title: 'Pendências', color: 'bg-cyan-50 border-cyan-200' },
@@ -38,129 +72,634 @@
       { id: 'urgente', label: 'Urgente', color: 'bg-red-100 text-red-800' },
     ];
 
-    const Icons = {
-      Plus: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>,
-      Trash: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>,
-      Play: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>,
-      Pause: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>,
-      Database: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path></svg>
-    };
+    const TASK_TYPES = [
+      { id: 'paineis', label: 'Painéis' },
+      { id: 'rh', label: 'RH (Comunicação interna)' },
+      { id: 'eventos', label: 'Eventos' },
+      { id: 'grafico', label: 'Material Gráfico' },
+      { id: 'envio', label: 'Envio de Materiais' },
+    ];
 
-    const formatTime = (totalSeconds) => {
+    // Carregamento Inicial do LocalStorage (Banco de dados local do navegador)
+    const FALLBACK_TASKS = [
+      {
+        id: 't1', parentId: null, title: 'Criar protótipo da tela inicial', status: 'desenvolvimento',
+        priority: 'alta', type: 'paineis', startDate: '2026-06-20', endDate: '2026-06-25',
+        description: 'Desenvolver o wireframe e o design para a nova tela inicial.',
+        comments: [{ id: 'c1', text: 'O design precisa seguir o novo guia de estilos.', date: '2026-06-21T10:00:00' }],
+        attachments: [{ id: 'a1', name: 'guia-de-estilos.pdf' }],
+        timeSpent: 3600, isTimerRunning: false, lastTimerStart: null
+      }
+    ];
+
+    let tasks = JSON.parse(localStorage.getItem('kanban_tasks')) || FALLBACK_TASKS;
+    let activeTab = 'kanban';
+    let draggedTaskId = null;
+    let modalStack = [];
+    let expandedCards = {};
+    let taskToDeleteId = null;
+
+    // Salvamento Automático
+    function saveState() {
+      localStorage.setItem('kanban_tasks', JSON.stringify(tasks));
+      render();
+    }
+
+    // Formatador de tempo (Segundos para HH:MM:SS)
+    function formatTime(totalSeconds) {
       if (!totalSeconds) return '00:00';
       const h = Math.floor(totalSeconds / 3600);
       const m = Math.floor((totalSeconds % 3600) / 60);
       const s = totalSeconds % 60;
-      return h > 0 ? `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}` : `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    };
-
-    const LiveTimerDisplay = ({ timeSpent, isTimerRunning, lastTimerStart }) => {
-      const [elapsed, setElapsed] = useState(0);
-      useEffect(() => {
-        let interval;
-        if (isTimerRunning && lastTimerStart) {
-          setElapsed(Math.floor((Date.now() - lastTimerStart) / 1000));
-          interval = setInterval(() => setElapsed(Math.floor((Date.now() - lastTimerStart) / 1000)), 1000);
-        } else { setElapsed(0); }
-        return () => clearInterval(interval);
-      }, [isTimerRunning, lastTimerStart]);
-      return <span>{formatTime((timeSpent || 0) + elapsed)}</span>;
-    };
-
-    const INITIAL_TASKS = [
-      { id: 't1', title: 'Bem-vindo ao seu Kanban!', status: 'backlog', priority: 'media', timeSpent: 0, isTimerRunning: false, lastTimerStart: null }
-    ];
-
-    function App() {
-      const [tasks, setTasks] = useState(INITIAL_TASKS);
-      const [draggedTaskId, setDraggedTaskId] = useState(null);
-
-      const toggleTimer = (taskId) => {
-        setTasks(prevTasks => {
-          const now = Date.now();
-          const task = prevTasks.find(t => t.id === taskId);
-          const isStarting = !task.isTimerRunning;
-          
-          return prevTasks.map(t => {
-            if (t.id === taskId) {
-              return isStarting 
-                ? { ...t, isTimerRunning: true, lastTimerStart: now } 
-                : { ...t, isTimerRunning: false, timeSpent: t.timeSpent + Math.floor((now - t.lastTimerStart) / 1000), lastTimerStart: null };
-            }
-            if (isStarting && t.isTimerRunning) {
-               return { ...t, isTimerRunning: false, timeSpent: t.timeSpent + Math.floor((now - t.lastTimerStart) / 1000), lastTimerStart: null };
-            }
-            return t;
-          });
-        });
-      };
-
-      const handleCreateTask = () => {
-        const newTask = { id: `t${Date.now()}`, title: 'Nova Demanda', status: 'backlog', priority: 'media', timeSpent: 0, isTimerRunning: false, lastTimerStart: null };
-        setTasks([...tasks, newTask]);
-      };
-
-      const handleDragStart = (e, taskId) => { setDraggedTaskId(taskId); setTimeout(() => e.target.classList.add('opacity-50'), 0); };
-      const handleDragEnd = (e) => { e.target.classList.remove('opacity-50'); setDraggedTaskId(null); };
-      const handleDrop = (e, columnId) => {
-        e.preventDefault();
-        if(draggedTaskId) {
-            setTasks(prev => prev.map(t => t.id === draggedTaskId ? { ...t, status: columnId } : t));
-            setDraggedTaskId(null);
-        }
-      };
-
-      return (
-        <div className="min-h-screen flex flex-col text-slate-800">
-          <header className="bg-white shadow-sm px-6 py-4 flex justify-between items-center border-b">
-            <div>
-              <h1 className="text-2xl font-bold">Minhas Demandas</h1>
-              <p className="text-sm text-slate-500">Seu quadro Kanban ao vivo na internet!</p>
-            </div>
-            <button onClick={handleCreateTask} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm">
-              <Icons.Plus /> Nova Demanda
-            </button>
-          </header>
-
-          <main className="flex-1 overflow-x-auto p-6">
-            <div className="flex gap-6 items-start min-w-max">
-              {COLUMNS.map(col => (
-                <div key={col.id} onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDrop(e, col.id)} className={`w-80 flex flex-col rounded-xl border ${col.color} min-h-[70vh]`}>
-                  <div className="p-4 font-semibold border-b bg-white/50 flex justify-between items-center">
-                     {col.title}
-                     <span className="bg-white text-slate-500 text-xs px-2 py-1 rounded-full shadow-sm">{tasks.filter(t => t.status === col.id).length}</span>
-                  </div>
-                  <div className="p-3 space-y-3 custom-scrollbar">
-                    {tasks.filter(t => t.status === col.id).map(task => (
-                      <div key={task.id} draggable onDragStart={(e) => handleDragStart(e, task.id)} onDragEnd={handleDragEnd} className="bg-white p-4 rounded-lg shadow-sm border border-slate-200 cursor-grab hover:shadow-md">
-                        <div className="flex justify-between items-start mb-2">
-                           <span className={`text-xs font-medium px-2 py-1 rounded-md ${PRIORITIES.find(p => p.id === task.priority)?.color}`}>
-                             {PRIORITIES.find(p => p.id === task.priority)?.label}
-                           </span>
-                           <button onClick={() => setTasks(tasks.filter(t => t.id !== task.id))} className="text-slate-400 hover:text-red-500 hover:bg-red-50 p-1 rounded"><Icons.Trash /></button>
-                        </div>
-                        <h3 className="font-medium text-slate-800 leading-snug">{task.title}</h3>
-                        <div className="mt-4 pt-3 border-t border-slate-50 flex justify-end">
-                           <button onClick={(e) => toggleTimer(task.id)} className={`flex items-center gap-1 px-2 py-1.5 rounded text-xs font-semibold border ${task.isTimerRunning ? 'bg-red-50 text-red-600 border-red-200' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
-                             {task.isTimerRunning ? <Icons.Pause /> : <Icons.Play />}
-                             <span className="w-[45px] text-right font-mono">
-                                <LiveTimerDisplay timeSpent={task.timeSpent} isTimerRunning={task.isTimerRunning} lastTimerStart={task.lastTimerStart} />
-                             </span>
-                           </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </main>
-        </div>
-      );
+      const formattedM = m.toString().padStart(2, '0');
+      const formattedS = s.toString().padStart(2, '0');
+      return h > 0 ? `${h.toString().padStart(2, '0')}:${formattedM}:${formattedS}` : `${formattedM}:${formattedS}`;
     }
 
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<App />);
+    // Loop global do Cronômetro
+    setInterval(() => {
+      let updated = false;
+      tasks = tasks.map(task => {
+        if (task.isTimerRunning) {
+          updated = true;
+          return { ...task, timeSpent: (task.timeSpent || 0) + 1 };
+        }
+        return task;
+      });
+      if (updated) {
+        localStorage.setItem('kanban_tasks', JSON.stringify(tasks));
+        updateTimerElements();
+      }
+    }, 1000);
+
+    function updateTimerElements() {
+      // Atualiza os cronômetros na tela sem precisar redesenhar tudo
+      document.querySelectorAll('[data-timer-id]').forEach(elem => {
+        const id = elem.getAttribute('data-timer-id');
+        const task = tasks.find(t => t.id === id);
+        if (task) {
+          let elapsed = 0;
+          if (task.isTimerRunning && task.lastTimerStart) {
+            elapsed = Math.floor((Date.now() - task.lastTimerStart) / 1000);
+          }
+          elem.innerText = formatTime(task.timeSpent + elapsed);
+        }
+      });
+    }
+
+    const toggleTimer = (e, taskId) => {
+      e.stopPropagation();
+      const now = Date.now();
+      const target = tasks.find(t => t.id === taskId);
+      const isStarting = !target.isTimerRunning;
+
+      tasks = tasks.map(task => {
+        if (task.id === taskId) {
+          if (isStarting) {
+            return { ...task, isTimerRunning: true, lastTimerStart: now };
+          } else {
+            const elapsed = task.lastTimerStart ? Math.floor((now - task.lastTimerStart) / 1000) : 0;
+            return { ...task, isTimerRunning: false, timeSpent: task.timeSpent + elapsed, lastTimerStart: null };
+          }
+        } else if (isStarting && task.isTimerRunning) {
+          const elapsed = task.lastTimerStart ? Math.floor((now - task.lastTimerStart) / 1000) : 0;
+          return { ...task, isTimerRunning: false, timeSpent: task.timeSpent + elapsed, lastTimerStart: null };
+        }
+        return task;
+      });
+      saveState();
+    };
+
+    function handleCreateTask(parentId = null) {
+      const newTask = {
+        id: `t${Date.now()}`,
+        parentId: parentId,
+        title: parentId ? 'Nova Subtarefa' : 'Nova Demanda',
+        status: 'backlog',
+        priority: 'media',
+        type: 'paineis',
+        startDate: '',
+        endDate: '',
+        description: '',
+        comments: [],
+        attachments: [],
+        timeSpent: 0,
+        isTimerRunning: false,
+        lastTimerStart: null,
+      };
+      tasks.push(newTask);
+      localStorage.setItem('kanban_tasks', JSON.stringify(tasks));
+      openTask(newTask.id);
+      render();
+    }
+
+    function openTask(id) {
+      modalStack.push(id);
+      renderModal();
+    }
+
+    function closeTask() {
+      modalStack.pop();
+      renderModal();
+    }
+
+    function closeAllModals() {
+      modalStack = [];
+      renderModal();
+    }
+
+    // Drag and Drop
+    function handleDragStart(e, id) { draggedTaskId = id; e.dataTransfer.setData('text/plain', id); }
+    function handleDragOver(e) { e.preventDefault(); }
+    function handleDrop(e, columnId) {
+      e.preventDefault();
+      if (!draggedTaskId) return;
+      tasks = tasks.map(t => t.id === draggedTaskId ? { ...t, status: columnId } : t);
+      draggedTaskId = null;
+      saveState();
+    }
+
+    function confirmDelete(e, id) {
+      e.stopPropagation();
+      taskToDeleteId = id;
+      const deleteModal = document.getElementById('delete-modal');
+      deleteModal.innerHTML = `
+        <div class="bg-white rounded-xl shadow-xl max-w-sm w-full p-6">
+          <h3 class="text-lg font-bold text-slate-800 mb-2">Excluir Demanda?</h3>
+          <p class="text-sm text-slate-600 mb-6">Esta ação removerá a demanda e todas as suas possíveis subtarefas permanentemente.</p>
+          <div class="flex justify-end gap-3">
+            <button onclick="closeDeleteModal()" class="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">Cancelar</button>
+            <button onclick="executeDelete()" class="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors">Excluir</button>
+          </div>
+        </div>
+      `;
+      deleteModal.classList.remove('hidden');
+    }
+
+    function closeDeleteModal() {
+      document.getElementById('delete-modal').classList.add('hidden');
+      taskToDeleteId = null;
+    }
+
+    function getSubtaskIdsToRemove(parentId) {
+      let ids = [];
+      const children = tasks.filter(t => t.parentId === parentId);
+      for (const child of children) {
+        ids.push(child.id);
+        ids = [...ids, ...getSubtaskIdsToRemove(child.id)];
+      }
+      return ids;
+    }
+
+    function executeDelete() {
+      if (!taskToDeleteId) return;
+      const idsToRemove = [taskToDeleteId, ...getSubtaskIdsToRemove(taskToDeleteId)];
+      tasks = tasks.filter(t => !idsToRemove.includes(t.id));
+      modalStack = modalStack.filter(id => !idsToRemove.includes(id));
+      closeDeleteModal();
+      saveState();
+      renderModal();
+    }
+
+    function toggleExpandCard(e, id) {
+      e.stopPropagation();
+      expandedCards[id] = !expandedCards[id];
+      render();
+    }
+
+    function switchTab(tab) {
+      activeTab = tab;
+      document.getElementById('btn-tab-kanban').className = tab === 'kanban' ? 'flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors bg-white text-blue-600 shadow-sm' : 'flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors text-slate-500 hover:text-slate-700';
+      document.getElementById('btn-tab-reports').className = tab === 'reports' ? 'flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors bg-white text-blue-600 shadow-sm' : 'flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors text-slate-500 hover:text-slate-700';
+      render();
+    }
+
+    // Função Principal de Renderização
+    function render() {
+      const container = document.getElementById('main-content');
+      if (activeTab === 'kanban') {
+        renderBoard(container);
+      } else {
+        renderReports(container);
+      }
+    }
+
+    // Renderiza o Quadro Kanban
+    function renderBoard(container) {
+      let html = `<div class="flex gap-6 h-full items-start min-w-max">`;
+      
+      COLUMNS.forEach(col => {
+        const colTasks = tasks.filter(t => !t.parentId && t.status === col.id);
+        html += `
+          <div ondragover="handleDragOver(event)" ondrop="handleDrop(event, '${col.id}')" class="w-80 flex flex-col rounded-xl border ${col.color} max-h-[calc(100vh-140px)]">
+            <div class="p-4 border-b border-inherit bg-white/50 rounded-t-xl flex justify-between items-center">
+              <h2 class="font-semibold text-slate-700">${col.title}</h2>
+              <span class="bg-white text-slate-500 text-xs px-2 py-1 rounded-full shadow-sm font-bold">${colTasks.length}</span>
+            </div>
+            <div class="p-3 flex-1 overflow-y-auto space-y-3 custom-scrollbar">
+        `;
+
+        if (colTasks.length === 0) {
+          html += `<div class="h-24 border-2 border-dashed border-slate-200 rounded-lg flex items-center justify-center text-slate-400 text-sm">Arraste cards para cá</div>`;
+        } else {
+          colTasks.forEach(task => {
+            const subtasks = tasks.filter(t => t.parentId === task.id);
+            const priority = PRIORITIES.find(p => p.id === task.priority) || PRIORITIES[1];
+            
+            html += `
+              <div draggable="true" ondragstart="handleDragStart(event, '${task.id}')" ondragend="handleDragEnd(event)" onclick="openTask('${task.id}')" class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow group flex flex-col">
+                <div class="flex justify-between items-start mb-2">
+                  <span class="text-xs font-semibold px-2 py-1 rounded-md ${priority.color}">${priority.label}</span>
+                  <button onclick="confirmDelete(event, '${task.id}')" class="text-slate-400 hover:text-red-500 p-1 rounded transition-colors"><i class="fa-regular fa-trash-can"></i></button>
+                </div>
+                <h3 class="font-bold text-slate-800 leading-snug mb-3">${task.title}</h3>
+                
+                <div class="flex items-center justify-between mt-auto pt-3 border-t border-slate-100">
+                  <div class="flex items-center gap-2 text-xs text-slate-400">
+                    ${(task.startDate || task.endDate) ? `<span><i class="fa-regular fa-calendar"></i> ${task.endDate ? task.endDate.split('-').reverse().slice(0,2).join('/') : 'S/P'}</span>` : ''}
+                    ${task.comments?.length ? `<span><i class="fa-regular fa-comment"></i> ${task.comments.length}</span>` : ''}
+                  </div>
+                  
+                  <button onclick="toggleTimer(event, '${task.id}')" class="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-semibold transition-all border ${task.isTimerRunning ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}">
+                    <i class="fa-solid ${task.isTimerRunning ? 'fa-pause' : 'fa-play'}"></i>
+                    <span data-timer-id="${task.id}" class="font-mono">${formatTime(task.timeSpent)}</span>
+                  </button>
+                </div>
+            `;
+
+            // Subtarefas resumidas no Card
+            if (subtasks.length > 0) {
+              const isExpanded = expandedCards[task.id];
+              html += `
+                <div class="mt-3 pt-3 border-t border-slate-100">
+                  <button onclick="toggleExpandCard(event, '${task.id}')" class="flex items-center gap-1 text-xs text-slate-500 font-medium hover:text-slate-700 w-full">
+                    <i class="fa-solid ${isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'}"></i>
+                    ${subtasks.length} Subtarefas
+                  </button>
+              `;
+              if (isExpanded) {
+                html += `<div class="mt-2 space-y-2">`;
+                subtasks.forEach(sub => {
+                  html += `
+                    <div onclick="event.stopPropagation(); openTask('${sub.id}')" class="flex items-center justify-between p-2 bg-slate-50 rounded-md border border-slate-200 hover:border-blue-300 transition-colors group/sub">
+                      <div class="flex items-center gap-2 overflow-hidden">
+                        <i class="fa-solid fa-arrow-turn-up rotate-90 text-slate-400 text-[10px]"></i>
+                        <span class="text-xs font-medium text-slate-700 truncate">${sub.title}</span>
+                      </div>
+                      <span class="text-[9px] bg-white px-1.5 py-0.5 rounded shadow-sm border border-slate-100 text-slate-500 font-bold uppercase">
+                        ${COLUMNS.find(c => c.id === sub.status)?.title.split(' ')[0] || '...'}
+                      </span>
+                    </div>
+                  `;
+                });
+                html += `</div>`;
+              }
+              html += `</div>`;
+            }
+
+            html += `</div>`;
+          });
+        }
+
+        html += `</div></div>`;
+      });
+
+      html += `</div>`;
+      container.innerHTML = html;
+      updateTimerElements();
+    }
+
+    // Renderiza a Aba de Relatórios
+    function renderReports(container) {
+      const totalTasks = tasks.length;
+      const parentTasks = tasks.filter(t => !t.parentId).length;
+      const subTasksCount = tasks.filter(t => t.parentId).length;
+      const activeTimersCount = tasks.filter(t => t.isTimerRunning).length;
+      
+      const getLiveTime = (task) => {
+        let elapsed = 0;
+        if (task.isTimerRunning && task.lastTimerStart) {
+          elapsed = Math.floor((Date.now() - task.lastTimerStart) / 1000);
+        }
+        return (task.timeSpent || 0) + elapsed;
+      };
+      
+      const totalTimeSpent = tasks.reduce((acc, t) => acc + getLiveTime(t), 0);
+
+      let html = `
+        <div class="max-w-6xl mx-auto space-y-6 pb-12">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+              <span class="text-sm font-semibold text-slate-500 uppercase tracking-wider block mb-1">Total de Demandas</span>
+              <div class="flex items-baseline gap-2">
+                <span class="text-4xl font-bold text-blue-600">${totalTasks}</span>
+                <span class="text-sm text-slate-400">(${parentTasks} principais, ${subTasksCount} subtarefas)</span>
+              </div>
+            </div>
+            
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+              <span class="text-sm font-semibold text-slate-500 uppercase tracking-wider block mb-1">Tempo Total Gasto</span>
+              <span class="text-4xl font-bold text-indigo-600 font-mono">${formatTime(totalTimeSpent)}</span>
+            </div>
+
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+              <span class="text-sm font-semibold text-slate-500 uppercase tracking-wider block mb-1">Cronômetros Ativos</span>
+              <span class="text-4xl font-bold text-red-500">${activeTimersCount}</span>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Gráficos de barras limpos em Tailwind -->
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+              <h3 class="text-lg font-bold text-slate-800 mb-6"><i class="fa-solid fa-list-check mr-2"></i>Distribuição por Estágio</h3>
+              <div class="space-y-4">
+      `;
+
+      COLUMNS.forEach(col => {
+        const count = tasks.filter(t => t.status === col.id).length;
+        const pct = totalTasks > 0 ? Math.round((count / totalTasks) * 100) : 0;
+        html += `
+          <div>
+            <div class="flex justify-between items-center mb-1 text-sm font-medium text-slate-700">
+              <span>${col.title}</span>
+              <span>${count} (${pct}%)</span>
+            </div>
+            <div class="w-full bg-slate-100 rounded-full h-2">
+              <div class="bg-blue-600 h-full rounded-full transition-all" style="width: ${pct}%"></div>
+            </div>
+          </div>
+        `;
+      });
+
+      html += `
+              </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+              <h3 class="text-lg font-bold text-slate-800 mb-6"><i class="fa-solid fa-tags mr-2"></i>Métricas por Tipo</h3>
+              <div class="space-y-4">
+      `;
+
+      TASK_TYPES.forEach(type => {
+        const typeTasks = tasks.filter(t => t.type === type.id);
+        const count = typeTasks.length;
+        const pct = totalTasks > 0 ? Math.round((count / totalTasks) * 100) : 0;
+        const timeSpent = typeTasks.reduce((acc, t) => acc + getLiveTime(t), 0);
+        
+        html += `
+          <div>
+            <div class="flex justify-between items-center mb-1 text-sm font-medium text-slate-700">
+              <span>${type.label}</span>
+              <div class="text-right">
+                <span class="text-slate-500 text-xs">${count} (${pct}%)</span>
+                <span class="text-indigo-500 font-mono text-xs block">${formatTime(timeSpent)}</span>
+              </div>
+            </div>
+            <div class="w-full bg-slate-100 rounded-full h-2">
+              <div class="bg-indigo-500 h-full rounded-full transition-all" style="width: ${pct}%"></div>
+            </div>
+          </div>
+        `;
+      });
+
+      html += `</div></div></div></div>`;
+      container.innerHTML = html;
+    }
+
+    // Renderiza e gerencia os Modais Empilhados
+    function renderModal() {
+      const container = document.getElementById('modal-container');
+      if (modalStack.length === 0) {
+        container.classList.add('hidden');
+        container.innerHTML = '';
+        return;
+      }
+
+      const activeId = modalStack[modalStack.length - 1];
+      const task = tasks.find(t => t.id === activeId);
+      if (!task) return;
+
+      const subtasks = tasks.filter(t => t.parentId === task.id);
+
+      container.innerHTML = `
+        <div class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex justify-center items-start overflow-y-auto p-4 sm:p-6" onclick="closeAllModals()">
+          <div class="bg-white w-full max-w-3xl rounded-2xl shadow-2xl mt-10 mb-10 flex flex-col overflow-hidden animate-in fade-in duration-200" onclick="event.stopPropagation()">
+            
+            <!-- Modal Header -->
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <div class="flex items-center gap-4">
+                ${modalStack.length > 1 ? `<button onclick="closeTask()" class="p-2 hover:bg-slate-200 rounded-lg text-slate-500"><i class="fa-solid fa-arrow-left"></i> Voltar</button>` : ''}
+                <span class="text-sm font-bold text-slate-500 uppercase tracking-wider">${task.parentId ? 'Subtarefa' : 'Demanda'}</span>
+                
+                <button onclick="toggleTimer(event, '${task.id}')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-semibold transition-colors border shadow-sm ${task.isTimerRunning ? 'bg-red-50 text-red-600 border-red-200' : 'bg-white text-slate-700 border-slate-200'}">
+                  <i class="fa-solid ${task.isTimerRunning ? 'fa-pause animate-pulse' : 'fa-play'}"></i>
+                  <span data-timer-id="${task.id}" class="font-mono">${formatTime(task.timeSpent)}</span>
+                </button>
+              </div>
+              <div class="flex items-center gap-2">
+                <button onclick="confirmDelete(event, '${task.id}')" class="p-2 text-red-500 hover:bg-red-50 rounded-lg"><i class="fa-regular fa-trash-can"></i></button>
+                <button onclick="closeAllModals()" class="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 rounded-lg"><i class="fa-solid fa-xmark"></i></button>
+              </div>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="p-6 md:p-8 flex-1 overflow-y-auto space-y-6">
+              
+              <!-- Título -->
+              <div>
+                <input type="text" id="modal-task-title" onblur="updateTaskField('${task.id}', 'title', this.value)" class="w-full text-2xl font-bold text-slate-800 border-none outline-none focus:ring-0 placeholder-slate-300" value="${task.title}" placeholder="Título da demanda...">
+              </div>
+
+              <!-- Grid de Propriedades -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 bg-slate-50 p-5 rounded-xl border border-slate-100">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Estágio</label>
+                  <select onchange="updateTaskField('${task.id}', 'status', this.value)" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none">
+                    ${COLUMNS.map(col => `<option value="${col.id}" ${task.status === col.id ? 'selected' : ''}>${col.title}</option>`).join('')}
+                  </select>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Prioridade</label>
+                  <select onchange="updateTaskField('${task.id}', 'priority', this.value)" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none">
+                    ${PRIORITIES.map(p => `<option value="${p.id}" ${task.priority === p.id ? 'selected' : ''}>${p.label}</option>`).join('')}
+                  </select>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Tipo de Demanda</label>
+                  <select onchange="updateTaskField('${task.id}', 'type', this.value)" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none">
+                    ${TASK_TYPES.map(t => `<option value="${t.id}" ${task.type === t.id ? 'selected' : ''}>${t.label}</option>`).join('')}
+                  </select>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Data de Início</label>
+                  <input type="date" onchange="updateTaskField('${task.id}', 'startDate', this.value)" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none" value="${task.startDate || ''}">
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Data de Conclusão</label>
+                  <input type="date" onchange="updateTaskField('${task.id}', 'endDate', this.value)" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none" value="${task.endDate || ''}">
+                </div>
+              </div>
+
+              <!-- Subtarefas -->
+              <div class="border border-slate-200 rounded-xl overflow-hidden">
+                <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                  <label class="block text-sm font-semibold text-slate-800">Subtarefas (${subtasks.length})</label>
+                  <button onclick="handleCreateTask('${task.id}')" class="text-sm bg-white hover:bg-slate-100 text-blue-600 border border-slate-200 px-3 py-1.5 rounded-lg flex items-center gap-2 font-medium shadow-sm"><i class="fa-solid fa-plus"></i> Criar Subtarefa</button>
+                </div>
+                <div class="p-2 space-y-1">
+                  ${subtasks.length > 0 ? subtasks.map(sub => `
+                    <div onclick="openTask('${sub.id}')" class="flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 cursor-pointer group border border-transparent hover:border-slate-200 transition-all">
+                      <div class="flex items-center gap-3">
+                        <div class="w-2 h-2 rounded-full ${sub.status === 'cancelados' ? 'bg-slate-400' : 'bg-blue-500'}"></div>
+                        <span class="text-sm font-medium text-slate-700 group-hover:text-blue-700">${sub.title}</span>
+                      </div>
+                      <div class="flex items-center gap-4">
+                        <span class="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded border">${COLUMNS.find(c => c.id === sub.status)?.title || '...'}</span>
+                      </div>
+                    </div>
+                  `).join('') : '<div class="p-4 text-center text-sm text-slate-400 italic">Nenhuma subtarefa criada.</div>'}
+                </div>
+              </div>
+
+              <!-- Descrição -->
+              <div class="space-y-3">
+                <label class="block text-sm font-semibold text-slate-800">Descrição da Demanda</label>
+                <textarea onblur="updateTaskField('${task.id}', 'description', this.value)" placeholder="Adicione uma descrição mais detalhada..." class="w-full min-h-[120px] bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:bg-white focus:border-blue-500 transition-all resize-y">${task.description || ''}</textarea>
+              </div>
+
+              <!-- Anexos -->
+              <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                  <label class="block text-sm font-semibold text-slate-800">Anexos (${task.attachments?.length || 0})</label>
+                  <button onclick="document.getElementById('file-upload').click()" class="text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg flex items-center gap-2 font-medium transition-colors"><i class="fa-solid fa-paperclip"></i> Incluir documento</button>
+                  <input type="file" id="file-upload" class="hidden" onchange="handleAttachFile(event, '${task.id}')">
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  ${task.attachments?.length > 0 ? task.attachments.map(att => `
+                    <div class="flex items-center justify-between bg-slate-50 border border-slate-200 p-3 rounded-lg group">
+                      <div class="flex items-center gap-3 overflow-hidden">
+                        <div class="p-2 bg-blue-100 text-blue-600 rounded-md"><i class="fa-solid fa-paperclip"></i></div>
+                        <span class="text-sm text-slate-700 truncate">${att.name}</span>
+                      </div>
+                      <button onclick="removeAttachment('${task.id}', '${att.id}')" class="text-slate-400 hover:text-red-500 p-1"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                  `).join('') : '<p class="text-sm text-slate-400 italic">Nenhum documento anexado.</p>'}
+                </div>
+              </div>
+
+              <!-- Comentários -->
+              <div class="space-y-3 pt-6 border-t border-slate-100">
+                <label class="block text-sm font-semibold text-slate-800">Comentários</label>
+                <div class="space-y-4">
+                  ${task.comments?.length > 0 ? task.comments.map(c => `
+                    <div class="flex gap-4">
+                      <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-sm">U</div>
+                      <div class="flex-1 bg-slate-50 border border-slate-100 p-3 rounded-tr-xl rounded-b-xl relative">
+                        <div class="flex justify-between items-center mb-1">
+                          <span class="text-xs font-semibold text-slate-700">Você</span>
+                          <div class="flex items-center gap-2">
+                             <span class="text-xs text-slate-400">${new Date(c.date).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                             <button onclick="deleteComment('${task.id}', '${c.id}')" class="text-slate-400 hover:text-red-500 text-xs"><i class="fa-regular fa-trash-can"></i></button>
+                          </div>
+                        </div>
+                        <p class="text-sm text-slate-600 whitespace-pre-wrap">${c.text}</p>
+                      </div>
+                    </div>
+                  `).join('') : '<p class="text-sm text-slate-400 italic">Sem comentários até o momento.</p>'}
+                </div>
+                
+                <div class="flex gap-3 pt-4">
+                  <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm">U</div>
+                  <div class="flex-1 flex flex-col items-end gap-2">
+                    <textarea id="comment-text-input" placeholder="Escreva um comentário..." class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-blue-500 transition-all resize-none h-20"></textarea>
+                    <button onclick="addComment('${task.id}')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium">Comentar</button>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      `;
+      container.classList.remove('hidden');
+    }
+
+    // Funções de Eventos de Inputs do Modal (Salva as alterações de volta no array global)
+    function updateTaskField(id, field, value) {
+      tasks = tasks.map(t => t.id === id ? { ...t, [field]: value } : t);
+      saveState();
+    }
+
+    function addComment(taskId) {
+      const input = document.getElementById('comment-text-input');
+      const text = input.value.trim();
+      if (!text) return;
+
+      tasks = tasks.map(t => {
+        if (t.id === taskId) {
+          const comments = t.comments || [];
+          comments.push({ id: `c${Date.now()}`, text, date: new Date().toISOString() });
+          return { ...t, comments };
+        }
+        return t;
+      });
+      saveState();
+      renderModal();
+    }
+
+    function deleteComment(taskId, commentId) {
+      tasks = tasks.map(t => {
+        if (t.id === taskId) {
+          return { ...t, comments: t.comments.filter(c => c.id !== commentId) };
+        }
+        return t;
+      });
+      saveState();
+      renderModal();
+    }
+
+    function handleAttachFile(e, taskId) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      tasks = tasks.map(t => {
+        if (t.id === taskId) {
+          const attachments = t.attachments || [];
+          attachments.push({ id: `a${Date.now()}`, name: file.name });
+          return { ...t, attachments };
+        }
+        return t;
+      });
+      saveState();
+      renderModal();
+    }
+
+    function removeAttachment(taskId, attId) {
+      tasks = tasks.map(t => {
+        if (t.id === taskId) {
+          return { ...t, attachments: t.attachments.filter(a => a.id !== attId) };
+        }
+        return t;
+      });
+      saveState();
+      renderModal();
+    }
+
+    // Inicialização da Tela
+    render();
   </script>
 </body>
 </html>
+```
+eof
+
+### O que fazer depois de salvar:
+1. Vá até a aba do seu site na Vercel (onde estava tudo em branco).
+2. Aguarde 30 segundos (esse é o tempo que a Vercel leva para ler o arquivo novo que você salvou no GitHub).
+3. Atualize a página pressionando **Ctrl + F5** (ou Cmd + Shift + R se estiver no Mac).
+
+**Pronto!** O Kanban completo e dinâmico aparecerá em tons azuis na sua tela, com todas as funções de Arrastar e Soltar, Criar Demandas, Entrar nos Detalhes, Criar Subtarefas, Excluir e Controlar o tempo dos cronômetros. E o melhor de tudo: você pode adicionar o link no seu Google Sites que ele salvará as demandas de forma estável no seu próprio navegador de forma imediata!
