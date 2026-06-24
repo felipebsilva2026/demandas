@@ -5,30 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Demandas de Marketing - Simon Electric</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    body { background-color: #f8fafc; font-family: sans-serif; }
-    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
-  </style>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
-<body class="p-6">
-  <div id="app" class="max-w-7xl mx-auto">
-    <header class="flex items-center gap-4 border-b pb-6 mb-6">
-      <div class="w-16 h-16 bg-white border rounded-lg overflow-hidden flex items-center justify-center">
-        <img src="https://drive.google.com/uc?id=1eMkveuSPyccEaoFOh8lzQVh0HBTB8T1w" alt="Simon Electric" class="w-full h-full object-contain">
-      </div>
-      <div>
-        <h1 class="text-2xl font-bold">Demandas de Marketing</h1>
-        <p class="text-slate-500">Sistema Integrado</p>
-      </div>
-    </header>
+<body>
+  <div id="root"></div>
 
-    <div id="board" class="flex gap-6 overflow-x-auto min-h-[500px]"></div>
-  </div>
-
-  <script>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
     const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxBUhgOXkGZ6ckb1DXjzyyeJrwCHJSCR17iGyGWCfwK9EEWt4-aVNVbTKeSQkdwRwXDfw/exec';
-    
+
     const COLUMNS = [
       { id: 'backlog', title: 'Backlog', color: 'bg-blue-50 border-blue-200' },
       { id: 'desenvolvimento', title: 'Em desenvolvimento', color: 'bg-sky-50 border-sky-200' },
@@ -38,55 +25,61 @@
       { id: 'cancelados', title: 'Cancelados', color: 'bg-slate-100 border-slate-300' }
     ];
 
-    let tasks = [];
+    function App() {
+      const [tasks, setTasks] = useState([]);
 
-    async function loadTasks() {
-      try {
-        const res = await fetch(SCRIPT_URL);
-        tasks = await res.json();
-      } catch(e) { tasks = []; }
-      render();
-    }
+      useEffect(() => {
+        fetch(SCRIPT_URL).then(res => res.json()).then(setTasks).catch(() => setTasks([]));
+      }, []);
 
-    async function sync() {
-      await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(tasks) });
-      render();
-    }
+      const sync = (newTasks) => {
+        setTasks(newTasks);
+        fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(newTasks) });
+      };
 
-    function render() {
-      const board = document.getElementById('board');
-      board.innerHTML = '';
-      
-      COLUMNS.forEach(col => {
-        const colDiv = document.createElement('div');
-        colDiv.className = `w-80 flex-shrink-0 flex flex-col rounded-xl border ${col.color}`;
-        colDiv.innerHTML = `
-          <div class="p-4 font-bold border-b">${col.title}</div>
-          <div class="p-3 flex-1 overflow-y-auto space-y-3">
-            ${tasks.filter(t => t.status === col.id).map(t => `
-              <div class="bg-white p-4 rounded shadow border text-sm">
-                <p class="font-bold">${t.title}</p>
-                <div class="mt-2 text-xs text-slate-500">${t.type || 'Geral'}</div>
+      const addTask = (status) => {
+        const title = prompt("Título da nova demanda:");
+        if (title) sync([...tasks, { id: Date.now(), title, status, type: 'Painéis', endDate: '' }]);
+      };
+
+      return (
+        <div className="p-6 bg-slate-50 min-h-screen">
+          <header className="flex items-center gap-4 border-b pb-6 mb-6">
+            <img src="https://drive.google.com/uc?id=1eMkveuSPyccEaoFOh8lzQVh0HBTB8T1w" alt="Simon Electric" className="w-16 h-16 object-contain border rounded bg-white p-1" />
+            <div>
+              <h1 className="text-2xl font-bold text-slate-800">Demandas de Marketing</h1>
+              <p className="text-slate-500">Gestão Integrada</p>
+            </div>
+          </header>
+
+          <div className="flex gap-6 overflow-x-auto pb-4">
+            {COLUMNS.map(col => (
+              <div key={col.id} className={`w-80 flex-shrink-0 flex flex-col rounded-xl border ${col.color}`}>
+                <div className="p-4 font-bold text-slate-700 border-b border-inherit">{col.title}</div>
+                <div className="p-3 space-y-3 flex-1 overflow-y-auto">
+                  {tasks.filter(t => t.status === col.id).map(t => {
+                    const isOverdue = t.endDate && new Date(t.endDate) < new Date();
+                    return (
+                      <div key={t.id} className="bg-white p-4 rounded shadow border text-sm relative">
+                        {isOverdue && <span className="absolute top-2 right-2 text-[10px] bg-red-100 text-red-700 px-1 rounded">Atrasado</span>}
+                        <p className="font-bold text-slate-800">{t.title}</p>
+                        <p className="text-xs text-slate-500 mt-2 uppercase font-semibold">{t.type}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="p-3">
+                  <button onClick={() => addTask(col.id)} className="w-full py-2 bg-white/50 hover:bg-blue-100 rounded border border-dashed text-xs text-slate-600 font-semibold">+ Adicionar</button>
+                </div>
               </div>
-            `).join('')}
+            ))}
           </div>
-          <div class="p-3">
-            <button onclick="addTask('${col.id}')" class="w-full py-2 bg-white/50 hover:bg-white rounded border border-dashed text-xs">+ Adicionar</button>
-          </div>
-        `;
-        board.appendChild(colDiv);
-      });
+        </div>
+      );
     }
 
-    function addTask(colId) {
-      const title = prompt("Título da nova demanda:");
-      if(title) {
-        tasks.push({ id: Date.now(), title, status: colId, type: 'Painéis' });
-        sync();
-      }
-    }
-
-    loadTasks();
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
   </script>
 </body>
 </html>
